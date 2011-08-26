@@ -47,7 +47,7 @@
 
 int daemonize = 0;
 
-#define ERROR(x...) do{LOG(LOG_ERR, "ERROR: " x);exit(-1);}while(0)
+#define ERROR(x...) do{LOG(LOG_ERR, "ERROR: " x);exit(EXIT_FAILURE);}while(0)
 #define LOG(prio,x...) do{if(daemonize > 1) syslog(prio, x); \
                           else fprintf(stderr,"net2pcap: " x);} while(0)
 
@@ -56,7 +56,7 @@ void PERROR(char *err) {
 
         strerror_r(errno, errormsg, MAX_LEN_ERRORMSG);
         LOG(LOG_CRIT, "%s: %s\n", err, errormsg);
-        exit(1);
+        exit(EXIT_FAILURE);
 }
 
 
@@ -174,7 +174,7 @@ void usage(void)
 		"\t snaplen   defaults to 1600\n"
 		"\t capfile   defaults to net2pcap.cap\n"
 		"\t ethertype defaults to ETH_P_ALL (sniff all)\n");
-	exit(0);
+	exit(EXIT_FAILURE);
 }
 
 
@@ -371,4 +371,5 @@ int main(int argc, char *argv[])
 	}
 	if (daemonize) closelog();
 	LOG(LOG_INFO,"Stopped.\n");
+        exit(EXIT_SUCCESS);
 }
