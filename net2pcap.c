@@ -240,6 +240,10 @@ int main(int argc, char *argv[])
 	sa.sa_flags= SA_RESTART;
 	if (sigaction(SIGTERM, &sa, NULL) == -1) PERROR("sigaction(term)");
 
+	sa.sa_handler = &term_handler;
+	if (sigemptyset(&sa.sa_mask) == -1) ERROR("sigemptyset");
+	if (sigaction(SIGINT, &sa, NULL) == -1) PERROR("sigaction(int)");
+
 	sa.sa_handler = &hup_handler;
 	if (sigemptyset(&sa.sa_mask) == -1) ERROR("sigemptyset");
 	sa.sa_flags= SA_RESTART;
