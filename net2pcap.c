@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
+#include <unistd.h>
 
 #define MAX_LEN_ERRORMSG 2048
 
@@ -47,7 +48,7 @@
 int daemonize = 0;
 
 #define ERROR(x...) do{LOG(LOG_ERR, "ERROR: " x);exit(-1);}while(0)
-#define LOG(prio,x...) do{if(daemonize) syslog(prio, x); \
+#define LOG(prio,x...) do{if(daemonize > 1) syslog(prio, x); \
                           else fprintf(stderr,"net2pcap: " x);} while(0)
 
 void PERROR(char *err) {
@@ -318,12 +319,10 @@ int main(int argc, char *argv[])
 	linktype = arphdr_to_linktype(sll.sll_hatype);
 
 	if (daemonize) {
-		switch (fork()) {
-			case -1: PERROR("fork");
-			case 0: break;
-			default: exit(0);
-		}
+                if (daemon(0, 0) != 0)
+                        PERROR("daemon()");
 		openlog("net2pcap", LOG_PID, LOG_DAEMON);
+                daemonize++;
 	}
 
 	LOG(LOG_INFO,"Started.\n");
