@@ -15,10 +15,7 @@
  * Lesser General Public License for more details.
  */
 
-/* $Id: net2pcap.c,v 1.5 2003/10/29 23:39:25 pbi Exp pbi $ */
-
-#define VERSION "0.1.5"
-#define IDENT "net2pcap v" VERSION " -- http://www.secdev.org/projects/net2pcap.html\n"
+#define IDENT "net2pcap -- http://www.secdev.org/projects/net2pcap.html\n"
 
 #include <sys/types.h>
 #include <asm/types.h>
