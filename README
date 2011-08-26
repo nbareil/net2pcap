@@ -1,0 +1,27 @@
+
+Net2PCAP is a simple network to pcap capture file for Linux. Its goal
+is to be as simple as possible (hence auditable) so that good
+confidence can be reached, for it to be used in hostile
+environments.
+
+It does not use any library except a bit of libc. It does not do
+anything except dumping network traffic from an interface to a pcap
+file. It is less than 400 lines of C. Please audit it !
+
+Comparison with tcpdump
+
+  * Yes, tcpdump -w capfile can do almost the same. But the goal of
+    tcpdump is network debugging (thus, lot of options, packet
+    disassembly, etc.). The goal of net2pcap is to capture traffic into
+    a file in hostile environments (honeypots, internet, etc.) for
+    future analysis.
+  * net2pcap can run in daemon mode
+  * net2pcap can reopen its capture file (SIGHUP) (used for capture file rotation)
+  * net2pcap does not do anything else than reading from network and dumping to file
+  * net2pcap does not use libpcap
+  * net2pcap runs only on Linux
+  * net2pcap is auditable (less than 400 lines)
+
+Original code from Philippe Biondi, bugs added by Nicolas Bareil :)
+
+http://www.secdev.org/projects/net2pcap/
