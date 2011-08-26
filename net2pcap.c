@@ -232,7 +232,7 @@ int main(int argc, char *argv[])
 	struct timezone tz;
 	struct sigaction sa;
 	int xdump = 0;
-	int pktnb = 0;
+	unsigned long long int pktnb = 0;
 	int linktype;
 
 	sa.sa_handler = &term_handler;
@@ -366,7 +366,7 @@ int main(int argc, char *argv[])
         		if (write(f, buf, l) == -1) PERROR("write(buf)");
 			pktnb++;
         	}
-		LOG(LOG_INFO,"Received %i packets\n", pktnb);
+		LOG(LOG_INFO,"Received %lld packets\n", pktnb);
         	if (close(f) == -1) PERROR("close");
 	}
 	if (daemonize) closelog();
