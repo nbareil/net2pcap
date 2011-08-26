@@ -36,11 +36,25 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <string.h>
 
-#define PERROR(x) do{ perror(x); exit(-1); }while(0);
-#define ERROR(x...) do{fprintf(stderr, "ERROR: " x);exit(-1);}while(0)
-#define LOG(prio,x...) do{if(daemon) syslog(prio, x); \
+#define MAX_LEN_ERRORMSG 2048
+
+int daemonize = 0;
+
+#define ERROR(x...) do{LOG(LOG_ERR, "ERROR: " x);exit(-1);}while(0)
+#define LOG(prio,x...) do{if(daemonize) syslog(prio, x); \
                           else fprintf(stderr,"net2pcap: " x);} while(0)
+
+void PERROR(char *err) {
+        char errormsg[MAX_LEN_ERRORMSG];
+
+        strerror_r(errno, errormsg, MAX_LEN_ERRORMSG);
+        LOG(LOG_CRIT, "%s: %s\n", err, errormsg);
+        exit(1);
+}
+
+
 
 #define CRATIONMASK (S_IRUSR|S_IWUSR)
 
@@ -207,7 +221,6 @@ int main(int argc, char *argv[])
 	struct timeval tv;
 	struct timezone tz;
 	struct sigaction sa;
-	int daemon = 0;
 	int xdump = 0;
 	int pktnb = 0;
 	int linktype;
@@ -245,7 +258,7 @@ int main(int argc, char *argv[])
 			snaplen = strtoul(optarg, NULL,0);
 			break;
 		case 'd':
-			daemon = 1;
+			daemonize = 1;
 			break;
 		case 'x':
 			xdump = 1;
@@ -295,7 +308,7 @@ int main(int argc, char *argv[])
 		PERROR("getsockname");
 	linktype = arphdr_to_linktype(sll.sll_hatype);
 
-	if (daemon) {
+	if (daemonize) {
 		switch (fork()) {
 			case -1: PERROR("fork");
 			case 0: break;
@@ -332,7 +345,7 @@ int main(int argc, char *argv[])
         	while (!hup_received && !term_received) {  /* Receive loop */
         		l = recv(s, buf, snaplen, 0);
         		if (l == -1) PERROR("recv");
-        		if (xdump && !daemon)
+        		if (xdump && !daemonize)
         			hexdump(buf, l);
         		gettimeofday(&(phdr.ts), NULL);
         		phdr.caplen = l;
@@ -344,6 +357,6 @@ int main(int argc, char *argv[])
 		LOG(LOG_INFO,"Received %i packets\n", pktnb);
         	if (close(f) == -1) PERROR("close");
 	}
-	if (daemon) closelog();
+	if (daemonize) closelog();
 	LOG(LOG_INFO,"Stopped.\n");
 }
