@@ -3,11 +3,11 @@
  *              see http://www.secdev.org/projects/net2pcap.html
  *              for more informations
  *
- * Copyright (C) 2003  Philippe Biondi <phil@secdev.org>
+ * Copyright (C) 2003-2011  Philippe Biondi <phil@secdev.org>
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * version 2 as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
