@@ -185,7 +185,7 @@ int sane(unsigned char x)
 	return ((x >= 0x20) && (x < 0x80));
 }
 
-int hexdump(void *buf, int len)
+void hexdump(void *buf, int len)
 {
 	unsigned char *b = buf;
 	int i,j;
