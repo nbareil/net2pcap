@@ -166,15 +166,18 @@ int arphdr_to_linktype(int arphdr)
 
 void usage(void)
 {
-	fprintf(stderr, IDENT 
-		"Usage: net2pcap -i interface [-pdx] [-f capfile] [-t ethertype] [-s snaplen]\n"
-		"\t-p : doesn't set promiscuous mode\n"
-		"\t-d : daemon mode (background + uses syslog)\n"
-		"\t-x : hexdumps every packet on output (if not daemon)\n"
-		"\t snaplen   defaults to 1600\n"
-		"\t capfile   defaults to net2pcap.cap\n"
-		"\t ethertype defaults to ETH_P_ALL (sniff all)\n");
-	exit(EXIT_FAILURE);
+        fprintf(stderr, IDENT
+                "Usage: net2pcap -i interface [-pdx] [-f capfile] [-t ethertype] [-s snaplen] [-r newroot]\n"
+                "\t-p : doesn't set promiscuous mode\n"
+                "\t-d : daemon mode (background + uses syslog)\n"
+                "\t-x : hexdumps every packet on output (if not daemon)\n"
+                "\t-u : drop priviledges to UID\n"
+                "\t-g : drop priviledges to GID\n"
+                "\t-r : chroot into newroot\n"
+                "\t snaplen   defaults to 1600\n"
+                "\t capfile   defaults to net2pcap.cap\n"
+                "\t ethertype defaults to ETH_P_ALL (sniff all)\n");
+        exit(EXIT_FAILURE);
 }
 
 
@@ -218,6 +221,7 @@ int main(int argc, char *argv[])
 	int s,l;
 	int ptype = ETH_P_ALL;
 	char *iff = NULL;
+        char *newroot = NULL;
 	char *fcap = "net2pcap.cap";
 	int promisc = 1;
 	int ifidx = 0;
@@ -252,7 +256,7 @@ int main(int argc, char *argv[])
 
 	/* Get options */
 	
-        while ((c = getopt(argc, argv, "dxhi:f:t:s:p")) != -1) {
+        while ((c = getopt(argc, argv, "dxhi:f:t:r:s:p")) != -1) {
 		switch(c) {
 		case 'h':
 			usage();
@@ -267,6 +271,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'p':
 			promisc = 0;
+			break;
+		case 'r':
+			newroot = optarg;
 			break;
 		case 's':
 			snaplen = strtoul(optarg, NULL,0);
@@ -321,6 +328,13 @@ int main(int argc, char *argv[])
 	if (getsockname(s, (struct sockaddr *)&sll, &l) == -1)
 		PERROR("getsockname");
 	linktype = arphdr_to_linktype(sll.sll_hatype);
+
+        if (newroot) {
+                if (chroot(newroot) != 0)
+                        PERROR("chroot");
+                if (chdir("/") != 0)
+                        PERROR("chdir(/)");
+        }
 
 	if (daemonize) {
                 if (daemon(0, 0) != 0)
