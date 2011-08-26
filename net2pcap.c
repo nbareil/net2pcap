@@ -17,6 +17,8 @@
 
 #define IDENT "net2pcap -- http://www.secdev.org/projects/net2pcap.html\n"
 
+#define _FILE_OFFSET_BITS 64
+
 #include <sys/types.h>
 #include <asm/types.h>
 #include <sys/socket.h>
