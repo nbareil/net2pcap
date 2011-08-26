@@ -40,6 +40,10 @@
 
 #define MAX_LEN_ERRORMSG 2048
 
+#if __BYTE_ORDER == __BIG_ENDIAN
+#  error "net2pcap is not compatible with big endian architecture because of timestamp issues"
+#endif
+
 int daemonize = 0;
 
 #define ERROR(x...) do{LOG(LOG_ERR, "ERROR: " x);exit(-1);}while(0)
@@ -58,6 +62,11 @@ void PERROR(char *err) {
 
 #define CRATIONMASK (S_IRUSR|S_IWUSR)
 
+struct timeval_compat {
+        __u32 tv_sec;     /* seconds */
+        __u32 tv_usec;    /* microseconds */
+};
+
 /* From pcap.h */
 
 struct pcap_file_header {
@@ -71,7 +80,7 @@ struct pcap_file_header {
 };
 
 struct pcap_pkthdr {
-	struct timeval ts;      /* time stamp */
+	struct timeval_compat ts;      /* time stamp using 32 bits fields */
 	__u32 caplen;     /* length of portion present */
 	__u32 len;        /* length this packet (off wire) */
 };
@@ -218,7 +227,7 @@ int main(int argc, char *argv[])
 	struct sockaddr_ll sll;
 	struct pcap_file_header hdr;
 	struct pcap_pkthdr phdr;
-	struct timeval tv;
+	struct timeval native_tv;
 	struct timezone tz;
 	struct sigaction sa;
 	int xdump = 0;
@@ -328,7 +337,7 @@ int main(int argc, char *argv[])
 		if (l == -1) PERROR("lseek");
 		if (!l) { /* Empty file --> add header */
         		LOG(LOG_NOTICE, "Creating capture file %s\n", fcap);
-                	if (gettimeofday(&tv, &tz) == -1) PERROR("gettimeofday");
+                        if (gettimeofday(&native_tv, &tz) == -1) PERROR("gettimeofday");
                  	hdr.magic = PCAP_MAGIC;
                 	hdr.version_major = PCAP_VERSION_MAJOR;
                 	hdr.version_minor = PCAP_VERSION_MINOR;
@@ -347,7 +356,11 @@ int main(int argc, char *argv[])
         		if (l == -1) PERROR("recv");
         		if (xdump && !daemonize)
         			hexdump(buf, l);
-        		gettimeofday(&(phdr.ts), NULL);
+                        gettimeofday(&native_tv, NULL);
+
+                        phdr.ts.tv_sec  = (__u32) native_tv.tv_sec;
+                        phdr.ts.tv_usec = (__u32) native_tv.tv_usec;
+
         		phdr.caplen = l;
         		phdr.len = l;
         		if (write(f, &phdr, sizeof(phdr)) == -1) PERROR("write(phdr)");
