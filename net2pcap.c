@@ -238,6 +238,8 @@ int main(int argc, char *argv[])
 	int xdump = 0;
 	unsigned long long int pktnb = 0;
 	int linktype;
+        uid_t uid = 0;
+        gid_t gid = 0;
 
 	sa.sa_handler = &term_handler;
 	if (sigemptyset(&sa.sa_mask) == -1) ERROR("sigemptyset");
@@ -252,11 +254,10 @@ int main(int argc, char *argv[])
 	if (sigemptyset(&sa.sa_mask) == -1) ERROR("sigemptyset");
 	sa.sa_flags= SA_RESTART;
 	if (sigaction(SIGHUP, &sa, NULL) == -1) PERROR("sigaction(hup)");
-	
 
 	/* Get options */
-	
-        while ((c = getopt(argc, argv, "dxhi:f:t:r:s:p")) != -1) {
+
+        while ((c = getopt(argc, argv, "dxhi:f:t:r:s:pu:g:")) != -1) {
 		switch(c) {
 		case 'h':
 			usage();
@@ -281,6 +282,12 @@ int main(int argc, char *argv[])
 		case 'd':
 			daemonize = 1;
 			break;
+                case 'u':
+                        uid = strtoul(optarg, NULL,0);
+                        break;
+                case 'g':
+                        gid = strtoul(optarg, NULL,0);
+                        break;
 		case 'x':
 			xdump = 1;
 			break;
@@ -335,6 +342,12 @@ int main(int argc, char *argv[])
                 if (chdir("/") != 0)
                         PERROR("chdir(/)");
         }
+
+        if (gid && (setgid(gid) == -1))
+                PERROR("setgid()");
+
+        if (uid && (setuid(uid) == -1))
+                PERROR("setuid()");
 
 	if (daemonize) {
                 if (daemon(0, 0) != 0)
