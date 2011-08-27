@@ -42,7 +42,9 @@
 #define MAX_LEN_ERRORMSG 2048
 
 #if __BYTE_ORDER == __BIG_ENDIAN
-#  error "net2pcap is not compatible with big endian architecture because of timestamp issues"
+#        define NATIVE2COMPAT(x) (sizeof(struct timeval) != 8 ? (__u32)(x >> 32) : (x))
+#else
+#        define NATIVE2COMPAT(x) ((__u32)(x))
 #endif
 
 int daemonize = 0;
@@ -388,8 +390,8 @@ int main(int argc, char *argv[])
         			hexdump(buf, l);
                         gettimeofday(&native_tv, NULL);
 
-                        phdr.ts.tv_sec  = (__u32) native_tv.tv_sec;
-                        phdr.ts.tv_usec = (__u32) native_tv.tv_usec;
+                        phdr.ts.tv_sec  = NATIVE2COMPAT(native_tv.tv_sec);
+                        phdr.ts.tv_usec = NATIVE2COMPAT(native_tv.tv_usec);
 
         		phdr.caplen = l;
         		phdr.len = l;
