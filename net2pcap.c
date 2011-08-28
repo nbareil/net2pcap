@@ -39,6 +39,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#define DEFAULT_SNAPLEN 65535
 #define MAX_LEN_ERRORMSG 2048
 
 #if __BYTE_ORDER == __BIG_ENDIAN
@@ -176,9 +177,10 @@ void usage(void)
                 "\t-u : drop priviledges to UID\n"
                 "\t-g : drop priviledges to GID\n"
                 "\t-r : chroot into newroot\n"
-                "\t snaplen   defaults to 1600\n"
+                "\t snaplen   defaults to %d\n"
                 "\t capfile   defaults to net2pcap.cap\n"
-                "\t ethertype defaults to ETH_P_ALL (sniff all)\n");
+                "\t ethertype defaults to ETH_P_ALL (sniff all)\n",
+                DEFAULT_SNAPLEN);
         exit(EXIT_FAILURE);
 }
 
@@ -249,7 +251,7 @@ int main(int argc, char *argv[])
 	int ifidx = 0;
 	char c;
 	void *buf;
-	int snaplen = 1600;
+	int snaplen = DEFAULT_SNAPLEN;
 	int f;
 	struct sockaddr_ll sll;
 	struct pcap_file_header hdr;
