@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
 	int ifidx = 0;
 	char c;
 	void *buf;
-	int snaplen = DEFAULT_SNAPLEN;
+	size_t snaplen = DEFAULT_SNAPLEN;
 	int f;
 	struct sockaddr_ll sll;
 	struct pcap_file_header hdr;
@@ -302,16 +302,25 @@ int main(int argc, char *argv[])
 			newroot = optarg;
 			break;
 		case 's':
+                        errno = 0;
 			snaplen = strtoul(optarg, NULL,0);
+                        if (errno)
+                                PERROR("invalid snaplen");
 			break;
 		case 'd':
 			daemonize = 1;
 			break;
                 case 'u':
+                        errno = 0;
                         uid = strtoul(optarg, NULL,0);
+                        if (errno)
+                                PERROR("invalid uid");
                         break;
                 case 'g':
+                        errno = 0;
                         gid = strtoul(optarg, NULL,0);
+                        if (errno)
+                                PERROR("invalid gid");
                         break;
 		case 'x':
 			xdump = 1;
@@ -322,7 +331,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (snaplen <= 0) ERROR("Error: bad snaplen\n");
 	if (!iff) ERROR ("No interface specified\n");
 
 	buf = malloc(snaplen);
