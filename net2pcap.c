@@ -228,7 +228,7 @@ void xwrite(int fd, void *buf, size_t len) {
 }
 
 
-int term_received, hup_received; /* in .bss ==> initialized to 0 */ 
+volatile sig_atomic_t term_received = 0, hup_received = 0;
 
 void term_handler(int x)
 {
