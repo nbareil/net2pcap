@@ -338,6 +338,13 @@ int main(int argc, char *argv[])
 		PERROR("getsockname");
 	linktype = arphdr_to_linktype(sll.sll_hatype);
 
+        if (daemonize) {
+                openlog("net2pcap", LOG_PID|LOG_NDELAY, LOG_DAEMON);
+                if (daemon(0, 0) != 0)
+                        PERROR("daemon()");
+                daemonize++;
+        }
+
         if (newroot) {
                 if (chroot(newroot) != 0)
                         PERROR("chroot");
@@ -350,13 +357,6 @@ int main(int argc, char *argv[])
 
         if (uid && (setuid(uid) == -1))
                 PERROR("setuid()");
-
-	if (daemonize) {
-                if (daemon(0, 0) != 0)
-                        PERROR("daemon()");
-		openlog("net2pcap", LOG_PID, LOG_DAEMON);
-                daemonize++;
-	}
 
 	LOG(LOG_INFO,"Started.\n");
 
