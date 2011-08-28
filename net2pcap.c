@@ -206,6 +206,26 @@ void hexdump(void *buf, int len)
 	}
 }
 
+
+/* xwrite(): wrapper handling partial writes */
+void xwrite(int fd, void *buf, size_t len) {
+        ssize_t ret;
+        size_t remaining = len;
+
+        do {
+                ret = write(fd, buf, remaining);
+                if (ret == -1) {
+                        if (errno == EAGAIN || errno == EINTR)
+                                continue;
+                        else
+                                PERROR("write(buf)");
+                }
+                remaining  -= ret;
+                buf += ret;
+        } while (remaining > 0);
+}
+
+
 int term_received, hup_received; /* in .bss ==> initialized to 0 */ 
 
 void term_handler(int x)
@@ -250,6 +270,7 @@ int main(int argc, char *argv[])
 
 	sa.sa_handler = &term_handler;
 	if (sigemptyset(&sa.sa_mask) == -1) ERROR("sigemptyset");
+	sa.sa_flags= SA_RESTART;
 	if (sigaction(SIGINT, &sa, NULL) == -1) PERROR("sigaction(int)");
 
 	sa.sa_handler = &hup_handler;
@@ -377,27 +398,29 @@ int main(int argc, char *argv[])
                 	hdr.sigfigs = 0; 
                 	hdr.snaplen = snaplen;
                 	hdr.linktype = linktype; 
-			if (write(f, &hdr, sizeof(hdr)) == -1) PERROR("write(hdr)");
+                        xwrite(f, &hdr, sizeof(hdr));
 		} else 
 			LOG(LOG_NOTICE, "Appending to capture file %s\n", fcap);
 
         	hup_received = 0;
 		pktnb = 0;
         	while (!hup_received && !term_received) {  /* Receive loop */
-        		l = recv(s, buf, snaplen, 0);
-        		if (l == -1) PERROR("recv");
-        		if (xdump && !daemonize)
-        			hexdump(buf, l);
+                        ssize_t rcvdlen = recv(s, buf, snaplen, 0);
+                        if (rcvdlen == -1)
+                                PERROR("recv");
+                        if (xdump && !daemonize)
+                                hexdump(buf, rcvdlen);
                         gettimeofday(&native_tv, NULL);
 
                         phdr.ts.tv_sec  = NATIVE2COMPAT(native_tv.tv_sec);
                         phdr.ts.tv_usec = NATIVE2COMPAT(native_tv.tv_usec);
 
-        		phdr.caplen = l;
-        		phdr.len = l;
-        		if (write(f, &phdr, sizeof(phdr)) == -1) PERROR("write(phdr)");
-        		if (write(f, buf, l) == -1) PERROR("write(buf)");
-			pktnb++;
+                        phdr.len    = rcvdlen;
+                        phdr.caplen = rcvdlen;
+
+                        xwrite(f, &phdr, sizeof(phdr));
+                        xwrite(f, buf, rcvdlen);
+                        pktnb++;
         	}
 		LOG(LOG_INFO,"Received %lld packets\n", pktnb);
         	if (close(f) == -1) PERROR("close");
