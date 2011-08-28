@@ -382,13 +382,13 @@ int main(int argc, char *argv[])
 	LOG(LOG_INFO,"Started.\n");
 
 	while (!term_received) { /* Main loop */
-	
+                off_t filepos;
         	/* Prepare capture file */
         	f = open(fcap, O_CREAT|O_WRONLY|O_APPEND, CRATIONMASK);
 		if (f == -1) PERROR("open(append)");
-		l = lseek(f, 0, SEEK_END);
-		if (l == -1) PERROR("lseek");
-		if (!l) { /* Empty file --> add header */
+                filepos = lseek(f, 0, SEEK_END);
+                if (filepos == -1) PERROR("lseek");
+                if (!filepos) { /* Empty file --> add header */
         		LOG(LOG_NOTICE, "Creating capture file %s\n", fcap);
                         if (gettimeofday(&native_tv, &tz) == -1) PERROR("gettimeofday");
                  	hdr.magic = PCAP_MAGIC;
