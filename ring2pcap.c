@@ -183,11 +183,12 @@ void flush_packets(int fd, struct iovec *iov, unsigned long n)
 
 void packet_harvester(int fd, void *base)
 {
-     unsigned int i, j, k;
+     unsigned int i, j, k, pktcount;
      struct pcap_pkthdr pcaphdr[2*TP_FRAMES_NR];
      struct iovec iov[2*TP_FRAMES_NR];
+     int *flushpkt;
 
-     i = j = k = 0;
+     i = j = k = pktcount = 0;
      while (! term_received)
      {
           struct tpacket_hdr *hdr;
@@ -221,7 +222,17 @@ void packet_harvester(int fd, void *base)
 
                hexdump(iov[j].iov_base, iov[j].iov_len);
                j++;
+               pktcount++;
 
+               if (pktcount > FLUSH_PACKETS)
+               {
+                       *flushpkt = 1;
+                       if (futex(flushpkt, FUTEX_WAKE, 1, NULL, NULL, 0) != 1)
+                       {
+                               perror("futex_wake()");
+                               break;
+                       }
+               }
           }
           /* XXX check that 2*TP_FRAMES_NR < IOV_MAX */
           i++;
@@ -246,6 +257,7 @@ void writer(char *filename, int fd_in)
      struct timeval native_tv;
      struct timezone tz;
      off_t filepos;
+     int *processme;
 
      /* opening the file in append mode is incompatible with splice() */
      fd_out = open(filename, O_CREAT|O_WRONLY, CRATIONMASK);
@@ -281,11 +293,17 @@ void writer(char *filename, int fd_in)
 
      while (1)
      {
-          len = splice(fd_in, NULL, fd_out, NULL, 4096, SPLICE_F_MOVE|SPLICE_F_MORE);
-          if (len == -1)
-               PERROR("splice(pcapfile)");
-          if (len == 0)
-               sleep(1);
+             if (futex(processme, FUTEX_WAIT, 1, NULL, NULL, 0) != 0)
+             {
+                     PERROR("futex_wait()");
+                     break;
+             }
+
+             len = splice(fd_in, NULL, fd_out, NULL, 4096, SPLICE_F_MOVE|SPLICE_F_MORE);
+             if (len == -1)
+                     PERROR("splice(pcapfile)");
+             if (len == 0)
+                     sleep(1);
      }
 }
 
