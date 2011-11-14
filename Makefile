@@ -2,4 +2,5 @@
 
 CFLAGS=
 
+ring2pcap:
 net2pcap:
