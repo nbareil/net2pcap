@@ -15,7 +15,7 @@
  * Lesser General Public License for more details.
  */
 
-#define IDENT "net2pcap -- http://www.secdev.org/projects/net2pcap.html\n"
+#define IDENT "net2pcap -- http://www.secdev.org/projects/net2pcap/\n"
 
 #define _FILE_OFFSET_BITS 64
 
