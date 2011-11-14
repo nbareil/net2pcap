@@ -33,11 +33,15 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <sys/select.h>
+#include <sys/signalfd.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
 #include <unistd.h>
+
+#define MAX(a,b) (a > b ? a : b)
 
 #define DEFAULT_SNAPLEN 65535
 #define MAX_LEN_ERRORMSG 2048
@@ -228,21 +232,11 @@ void xwrite(int fd, void *buf, size_t len) {
 }
 
 
-volatile sig_atomic_t term_received = 0, hup_received = 0;
-
-void term_handler(int x)
-{
-	term_received = 1;
-}
-
-void hup_handler(int x)
-{
-	hup_received = 1;
-}
+int term_received = 0, hup_received = 0;
 
 int main(int argc, char *argv[])
 {
-	int s,l;
+	int s, l, sigfd;
 	int ptype = ETH_P_ALL;
 	char *iff = NULL;
         char *newroot = NULL;
@@ -259,26 +253,27 @@ int main(int argc, char *argv[])
 	struct timeval native_tv;
 	struct timezone tz;
 	struct sigaction sa;
+        struct signalfd_siginfo sigfdinfo;
+        sigset_t mask;
 	int xdump = 0;
 	unsigned long long int pktnb = 0;
 	int linktype;
         uid_t uid = 0;
         gid_t gid = 0;
+        fd_set readset;
 
-	sa.sa_handler = &term_handler;
-	if (sigemptyset(&sa.sa_mask) == -1) ERROR("sigemptyset");
-	sa.sa_flags= SA_RESTART;
-	if (sigaction(SIGTERM, &sa, NULL) == -1) PERROR("sigaction(term)");
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGINT);
+        sigaddset(&mask, SIGTERM);
+        sigaddset(&mask, SIGQUIT);
+        sigaddset(&mask, SIGHUP);
 
-	sa.sa_handler = &term_handler;
-	if (sigemptyset(&sa.sa_mask) == -1) ERROR("sigemptyset");
-	sa.sa_flags= SA_RESTART;
-	if (sigaction(SIGINT, &sa, NULL) == -1) PERROR("sigaction(int)");
+        if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1)
+                PERROR("sigprocmask()");
 
-	sa.sa_handler = &hup_handler;
-	if (sigemptyset(&sa.sa_mask) == -1) ERROR("sigemptyset");
-	sa.sa_flags= SA_RESTART;
-	if (sigaction(SIGHUP, &sa, NULL) == -1) PERROR("sigaction(hup)");
+        sigfd = signalfd(-1, &mask, 0);
+        if (sigfd == -1)
+                PERROR("signalfd()");
 
 	/* Get options */
 
@@ -415,22 +410,52 @@ int main(int argc, char *argv[])
         	hup_received = 0;
 		pktnb = 0;
         	while (!hup_received && !term_received) {  /* Receive loop */
-                        ssize_t rcvdlen = recv(s, buf, snaplen, 0);
-                        if (rcvdlen == -1)
-                                PERROR("recv");
-                        if (xdump && !daemonize)
-                                hexdump(buf, rcvdlen);
-                        gettimeofday(&native_tv, NULL);
+                        FD_ZERO(&readset);
+                        FD_SET(s, &readset);
+                        FD_SET(sigfd, &readset);
 
-                        phdr.ts.tv_sec  = NATIVE2COMPAT(native_tv.tv_sec);
-                        phdr.ts.tv_usec = NATIVE2COMPAT(native_tv.tv_usec);
+                        if (select(MAX(s, sigfd) + 1, &readset, NULL, NULL, NULL) == -1)
+                                PERROR("select()");
 
-                        phdr.len    = rcvdlen;
-                        phdr.caplen = rcvdlen;
+                        if (FD_ISSET(s, &readset))
+                        {
+                                ssize_t rcvdlen = recv(s, buf, snaplen, 0);
+                                if (rcvdlen == -1)
+                                        PERROR("recv");
+                                if (xdump && !daemonize)
+                                        hexdump(buf, rcvdlen);
+                                gettimeofday(&native_tv, NULL);
 
-                        xwrite(f, &phdr, sizeof(phdr));
-                        xwrite(f, buf, rcvdlen);
-                        pktnb++;
+                                phdr.ts.tv_sec  = NATIVE2COMPAT(native_tv.tv_sec);
+                                phdr.ts.tv_usec = NATIVE2COMPAT(native_tv.tv_usec);
+
+                                phdr.len    = rcvdlen;
+                                phdr.caplen = rcvdlen;
+
+                                xwrite(f, &phdr, sizeof(phdr));
+                                xwrite(f, buf, rcvdlen);
+                                pktnb++;
+                        }
+
+                        if (FD_ISSET(sigfd, &readset))
+                        {
+                                s = read(sigfd, &sigfdinfo, sizeof(sigfdinfo));
+                                if (s != sizeof(sigfdinfo))
+                                        PERROR("read(signalfd_siginfo)");
+
+                                switch (sigfdinfo.ssi_signo)
+                                {
+                                        case SIGINT:
+                                        case SIGTERM:
+                                                term_received = 1;
+                                                break;
+                                        case SIGHUP:
+                                                hup_received = 1;
+                                                break;
+                                        default:
+                                                ERROR("signal %d received", sigfdinfo.ssi_signo);
+                                }
+                        }
         	}
 		LOG(LOG_INFO,"Received %lld packets\n", pktnb);
         	if (close(f) == -1) PERROR("close");
