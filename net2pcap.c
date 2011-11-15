@@ -35,6 +35,8 @@
 #include <sys/time.h>
 #include <sys/select.h>
 #include <sys/signalfd.h>
+#include <sys/types.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -376,6 +378,26 @@ int main(int argc, char *argv[])
                         PERROR("chroot");
                 if (chdir("/") != 0)
                         PERROR("chdir(/)");
+        }
+
+        if (uid && !gid) {
+                /*
+                 * uid set but gid not, good behavior is to
+                 * set gid to primary group of uid
+                 */
+
+                struct passwd *user_entry;
+                errno = 0;
+                user_entry = getpwuid(uid);
+                if (!user_entry) {
+                        if (errno)
+                                PERROR("getpwuid()");
+                        else
+                                ERROR("uid %d does not exist,"
+                                      " cannot find primary group\n",
+                                      uid);
+                }
+                gid = user_entry->pw_gid;
         }
 
         if (gid && (setgid(gid) == -1))
