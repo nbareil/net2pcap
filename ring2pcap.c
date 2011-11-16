@@ -55,7 +55,6 @@ struct pcap_pkthdr {
 #define PCAP_VERSION_MAJOR 2
 #define PCAP_VERSION_MINOR 4
 #define CRATIONMASK (S_IRUSR|S_IWUSR)
-#define FLUSH_THRESHOLD 12
 
 #define SNAPLEN 65536
 
@@ -89,11 +88,13 @@ struct pcap_pkthdr {
 /* #define TP_FRAME_SIZE 1024 */
 /* #define TP_FRAMES_NR 4*64 */
 
-#define FRAMES_PER_BLOCK 8
-#define TP_BLOCK_NR  8
-#define TP_FRAME_SIZE 65536
-#define TP_BLOCK_SIZE TP_FRAME_SIZE*FRAMES_PER_BLOCK
-#define TP_FRAMES_NR TP_BLOCK_NR*FRAMES_PER_BLOCK
+#define FRAMES_PER_BLOCK 20
+#define TP_BLOCK_NR  64
+#define TP_FRAME_SIZE 2048
+#define TP_BLOCK_SIZE (TP_FRAME_SIZE*FRAMES_PER_BLOCK)
+#define TP_FRAMES_NR (TP_BLOCK_NR*FRAMES_PER_BLOCK)
+
+#define FLUSH_THRESHOLD (TP_FRAMES_NR/3)
 
 #define TPKT2LOAD(x) ((char *) x + TPACKET_HDRLEN + 14)
 #define LOAD2TPKT(x) ((char *) x - TPACKET_HDRLEN - 14)
@@ -215,17 +216,17 @@ void flush_packets(int fd, struct iovec *iov, unsigned long n)
 {
      int i;
 
-     /* if (vmsplice(fd, iov, n, 0) == -1) */
-     /*      PERROR("vmsplice()"); */
-
+     if (vmsplice(fd, iov, n, 0) == -1) {
+             printf("n=%d\n", n);
+          PERROR("vmsplice()");
+     }
      /* packets were written, we can now release the ring entries */
      for (i=1 ; i < n; i += 2)
      {
           struct iovec *v = (iov+i);
           struct tpacket_hdr *tpkt = (struct tpacket_hdr *) LOAD2TPKT(v->iov_base);
-          printf("  - %p\n", tpkt);
-          tpkt->tp_status = TP_STATUS_KERNEL;
 
+          tpkt->tp_status = TP_STATUS_KERNEL;
      }
 }
 
@@ -240,11 +241,51 @@ void packet_harvester(int sock, int fd, void *base)
      while (! term_received)
      {
              struct tpacket_hdr *hdr;
+             struct pcap_pkthdr *phdr;
 
-             hdr  = (struct tpacket_hdr *) ((char *)base + i*TP_FRAME_SIZE);
-
-             while (! hdr->tp_status) 
+             i = 0;
+             while (i < TP_FRAMES_NR)
              {
+                     hdr  = (struct tpacket_hdr *) ((char *)base + i*TP_FRAME_SIZE);
+
+
+                     if (hdr->tp_status & TP_STATUS_LOSING)
+                             ERROR("loosing packets, fuck!\n");
+
+                     /* XXX check that 2*TP_FRAMES_NR < IOV_MAX */
+                     if (hdr->tp_status & TP_STATUS_USER)
+                     {
+                             phdr = (pcaphdr + k++);
+
+                             phdr->len        = hdr->tp_len;
+                             phdr->caplen     = hdr->tp_snaplen;
+                             phdr->ts.tv_sec  = NATIVE2COMPAT(hdr->tp_sec);
+                             phdr->ts.tv_usec = NATIVE2COMPAT(hdr->tp_usec);
+
+                             /* printf("%x %x %x %x\n", phdr->len, phdr->caplen, phdr->ts.tv_sec, phdr->ts.tv_usec); */
+                             iov[j].iov_len = sizeof(pcaphdr);
+                             iov[j].iov_base = phdr;
+                             j++;
+
+                             iov[j].iov_len = hdr->tp_len;
+                             iov[j].iov_base = TPKT2LOAD(hdr);
+                             /* printf("mac=%d net=%d hdr=%p load=%p\n", hdr->tp_mac, hdr->tp_net, hdr, iov[j].iov_base); */
+
+                             //hexdump(iov[j].iov_base, iov[j].iov_len);
+                             j++;
+                             pktcount++;
+                     }
+
+                     i++;
+             }
+
+             if (j > FLUSH_THRESHOLD)
+             {
+                     flush_packets(fd, iov, j);
+                     j = k = 0;
+             }
+
+             if (0){
                      struct pollfd pfd;
 
                      pfd.fd      = sock;
@@ -253,72 +294,7 @@ void packet_harvester(int sock, int fd, void *base)
 
                      poll(&pfd, 1, -1);
              }
-             if (hdr->tp_status & TP_STATUS_LOSING)
-                     ERROR("loosing packets, fuck!\n");
-
-             hdr->tp_status = 0;
-
-             i++;
-             if (i >= TP_FRAMES_NR)
-                     i = 0;
      }
-             /* for (i=0 ; i < TP_FRAMES_NR ; i++) */
-             /* { */
-             /*         /\* XXX check that 2*TP_FRAMES_NR < IOV_MAX *\/ */
-             /*         struct tpacket_hdr *hdr; */
-             /*         struct pcap_pkthdr *phdr; */
-
-             /*         hdr  = (struct tpacket_hdr *) ((char *)base + i*TP_FRAME_SIZE); */
-          
-             /*         /\* if (hdr->tp_status == TP_STATUS_KERNEL) *\/ */
-
-
-             /*         if (hdr->tp_status & TP_STATUS_USER) */
-             /*         { */
-             /*                 printf("  + %p\n", hdr); */
-             /*                 if (hdr->tp_status & TP_STATUS_LOSING) */
-             /*                         ERROR("loosing packets, fuck!\n"); */
-                                     
-             /*                 phdr = (pcaphdr + k++); */
-
-             /*                 phdr->len        = hdr->tp_len; */
-             /*                 phdr->caplen     = hdr->tp_snaplen; */
-             /*                 phdr->ts.tv_sec  = NATIVE2COMPAT(hdr->tp_sec); */
-             /*                 phdr->ts.tv_usec = NATIVE2COMPAT(hdr->tp_usec); */
-
-             /*                 /\* printf("%x %x %x %x\n", phdr->len, phdr->caplen, phdr->ts.tv_sec, phdr->ts.tv_usec); *\/ */
-             /*                 iov[j].iov_len = sizeof(pcaphdr); */
-             /*                 iov[j].iov_base = phdr; */
-             /*                 j++; */
-
-             /*                 iov[j].iov_len = hdr->tp_len; */
-             /*                 iov[j].iov_base = TPKT2LOAD(hdr); */
-             /*                 /\* printf("mac=%d net=%d hdr=%p load=%p\n", hdr->tp_mac, hdr->tp_net, hdr, iov[j].iov_base); *\/ */
-
-             /*                 //hexdump(iov[j].iov_base, iov[j].iov_len); */
-             /*                 j++; */
-             /*                 pktcount++; */
-             /*         } */
-             /* } */
-
-
-             /* if (j > 0) */
-             /* { */
-             /*         flush_packets(fd, iov, j); */
-             /*         j = k = i = 0; */
-             /* } */
-
-          /* if (i >= TP_FRAMES_NR) */
-          /* { */
-          /*      /\* if (j > FLUSH_THRESHOLD) *\/ */
-          /*      if (j > 0) */
-          /*      { */
-          /*           flush_packets(fd, iov, j); */
-          /*           j = k = 0; */
-          /*      } */
-          /*      i = 0; */
-          /* } */
-     /* } */
 }
 
 void writer(char *filename, int fd_in)
