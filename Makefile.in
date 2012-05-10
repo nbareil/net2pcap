@@ -1,0 +1,15 @@
+#! /usr/bin/env make
+
+CC= @CC@
+CFLAGS=@CFLAGS@
+LDLIBS=@LIBS@
+
+prefix := /usr/local
+
+all: net2pcap
+
+net2pcap: net2pcap.o
+
+.PHONY: clean
+clean:
+	rm -f net2pcap.o net2pcap

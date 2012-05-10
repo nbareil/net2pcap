@@ -3,7 +3,7 @@
  *              see http://www.secdev.org/projects/net2pcap.html
  *              for more informations
  *
- * Copyright (C) 2003-2011  Philippe Biondi <phil@secdev.org>
+ * Copyright (C) 2003-2012  Philippe Biondi <phil@secdev.org>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -15,9 +15,10 @@
  * Lesser General Public License for more details.
  */
 
-#define IDENT "net2pcap -- http://www.secdev.org/projects/net2pcap/\n"
+#define IDENT "##PACKAGE_NAME -- ## PACKAGE_URL\n"
 
 #define _FILE_OFFSET_BITS 64
+#include "config.h"
 
 #include <sys/types.h>
 #include <asm/types.h>
@@ -39,9 +40,16 @@
 #include <pwd.h>
 #include <signal.h>
 #include <stdlib.h>
+#if HAVE_SECCOMP_H
+#        include <seccomp.h>
+#endif
 #include <syslog.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifndef O_LARGEFILE /* needed for SECCOMP rule */
+#        define O_LARGEFILE    00100000
+#endif
 
 #define MAX(a,b) (a > b ? a : b)
 
@@ -406,7 +414,40 @@ int main(int argc, char *argv[])
         if (uid && (setuid(uid) == -1))
                 PERROR("setuid()");
 
-	LOG(LOG_INFO,"Started.\n");
+#if HAVE_SECCOMP_H
+        if (seccomp_init(SCMP_ACT_KILL) < 0)
+                ERROR("Cannot go into SECCOMPv2");
+
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(open), 1,
+                         SCMP_A1(SCMP_CMP_EQ, O_CREAT|O_WRONLY|O_APPEND|O_LARGEFILE));
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(socketcall), 0);
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(close), 0);
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(write), 0);
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(gettimeofday), 0);
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(read), 0);
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(exit), 0);
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(_llseek), 0);
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(_newselect), 0);
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(exit_group), 0);
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(rt_sigreturn), 0);
+        seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(sigreturn), 0);
+
+        if (daemonize) {
+                seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(time), 0);
+                seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(fstat64), 0);
+                seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(mmap2), 0);
+                seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(munmap), 0);
+        }
+
+        if (seccomp_load() < 0)
+                ERROR("Cannot load SECCOMP filters");
+
+        LOG(LOG_INFO,"Started [sandboxed].\n");
+        seccomp_release();
+#else
+        LOG(LOG_INFO,"Started.\n");
+#endif /* HAVE_SECCOMP_H */
+
 
 	while (!term_received) { /* Main loop */
                 off_t filepos;
