@@ -37,6 +37,7 @@
 #include <sys/signalfd.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <grp.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -233,6 +234,18 @@ void xwrite(int fd, void *buf, size_t len) {
         } while (remaining > 0);
 }
 
+int only_digits(char *s) {
+        char c;
+        int nondigit_found = 0;
+
+        while (c = *s++) {
+                if (! isdigit(c)) {
+                        nondigit_found = 1;
+                }
+        }
+
+        return !nondigit_found;
+}
 
 int term_received = 0, hup_received = 0;
 
@@ -252,6 +265,8 @@ int main(int argc, char *argv[])
 	struct sockaddr_ll sll;
 	struct pcap_file_header hdr;
 	struct pcap_pkthdr phdr;
+        struct passwd *user_entry;
+        struct group *group_entry;
 	struct timeval native_tv;
 	struct timezone tz;
 	struct sigaction sa;
@@ -309,15 +324,43 @@ int main(int argc, char *argv[])
 			break;
                 case 'u':
                         errno = 0;
-                        uid = strtoul(optarg, NULL,0);
-                        if (errno)
-                                PERROR("invalid uid");
+                        if (only_digits(optarg)) {
+                                uid = strtoul(optarg, NULL, 0);
+                                if (errno) {
+                                        PERROR("Invalid uid");
+                                }
+                        } else {
+                                errno = 0;
+                                user_entry = getpwnam(optarg);
+                                if (user_entry == NULL) {
+                                        if (errno) {
+                                                PERROR("getpwent()");
+                                        } else {
+                                                ERROR("Username not found\n");
+                                        }
+                                }
+                                uid = user_entry->pw_uid;
+                        }
                         break;
                 case 'g':
                         errno = 0;
-                        gid = strtoul(optarg, NULL,0);
-                        if (errno)
-                                PERROR("invalid gid");
+                        if (only_digits(optarg)) {
+                                gid = strtoul(optarg, NULL, 0);
+                                if (errno) {
+                                        ERROR("Invalid gid");
+                                }
+                        } else {
+                                errno = 0;
+                                group_entry = getgrnam(optarg);
+                                if (group_entry == NULL) {
+                                        if (errno) {
+                                                PERROR("getgrnam()");
+                                        } else {
+                                                ERROR("Group name not found\n");
+                                        }
+                                }
+                                gid = group_entry->gr_gid;
+                        }
                         break;
 		case 'x':
 			xdump = 1;
@@ -385,8 +428,6 @@ int main(int argc, char *argv[])
                  * uid set but gid not, good behavior is to
                  * set gid to primary group of uid
                  */
-
-                struct passwd *user_entry;
                 errno = 0;
                 user_entry = getpwuid(uid);
                 if (!user_entry) {
