@@ -543,8 +543,7 @@ int main(int argc, char *argv[])
 
                         if (FD_ISSET(sigfd, &readset))
                         {
-                                s = read(sigfd, &sigfdinfo, sizeof(sigfdinfo));
-                                if (s != sizeof(sigfdinfo))
+                                if (read(sigfd, &sigfdinfo, sizeof(sigfdinfo)) != sizeof(sigfdinfo))
                                         PERROR("read(signalfd_siginfo)");
 
                                 switch (sigfdinfo.ssi_signo)
