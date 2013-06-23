@@ -22,7 +22,6 @@
 #include "config.h"
 
 #include <sys/types.h>
-#include <asm/types.h>
 #include <sys/socket.h>
 #include <netpacket/packet.h>
 #include <net/if.h>
@@ -30,7 +29,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
-#include <linux/if_ether.h>
+#include <netinet/if_ether.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <errno.h>
@@ -59,9 +58,9 @@
 #define MAX_LEN_ERRORMSG 2048
 
 #if __BYTE_ORDER == __BIG_ENDIAN
-#        define NATIVE2COMPAT(x) (sizeof(struct timeval) != 8 ? (__u32)(x >> 32) : (x))
+#        define NATIVE2COMPAT(x) (sizeof(struct timeval) != 8 ? (uint32_t)(x >> 32) : (x))
 #else
-#        define NATIVE2COMPAT(x) ((__u32)(x))
+#        define NATIVE2COMPAT(x) ((uint32_t)(x))
 #endif
 
 int daemonize = 0;
@@ -83,26 +82,26 @@ void PERROR(char *err) {
 #define CRATIONMASK (S_IRUSR|S_IWUSR)
 
 struct timeval_compat {
-        __u32 tv_sec;     /* seconds */
-        __u32 tv_usec;    /* microseconds */
+        uint32_t tv_sec;     /* seconds */
+        uint32_t tv_usec;    /* microseconds */
 };
 
 /* From pcap.h */
 
 struct pcap_file_header {
-	__u32 magic;
-	__u16 version_major;
-	__u16 version_minor;
-	__s32 thiszone;     /* gmt to local correction */
-	__u32 sigfigs;    /* accuracy of timestamps */
-	__u32 snaplen;    /* max length saved portion of each pkt */
-	__u32 linktype;   /* data link type (LINKTYPE_*) */
+	uint32_t magic;
+	uint16_t version_major;
+	uint16_t version_minor;
+	int32_t thiszone;     /* gmt to local correction */
+	uint32_t sigfigs;    /* accuracy of timestamps */
+	uint32_t snaplen;    /* max length saved portion of each pkt */
+	uint32_t linktype;   /* data link type (LINKTYPE_*) */
 };
 
 struct pcap_pkthdr {
 	struct timeval_compat ts;      /* time stamp using 32 bits fields */
-	__u32 caplen;     /* length of portion present */
-	__u32 len;        /* length this packet (off wire) */
+	uint32_t caplen;     /* length of portion present */
+	uint32_t len;        /* length this packet (off wire) */
 };
 
 
@@ -544,8 +543,7 @@ int main(int argc, char *argv[])
 
                         if (FD_ISSET(sigfd, &readset))
                         {
-                                s = read(sigfd, &sigfdinfo, sizeof(sigfdinfo));
-                                if (s != sizeof(sigfdinfo))
+                                if (read(sigfd, &sigfdinfo, sizeof(sigfdinfo)) != sizeof(sigfdinfo))
                                         PERROR("read(signalfd_siginfo)");
 
                                 switch (sigfdinfo.ssi_signo)
