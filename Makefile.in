@@ -1,9 +1,9 @@
 #! /usr/bin/env make
 
 CC= @CC@
-CFLAGS=@CFLAGS@
+CFLAGS=@CFLAGS@ -O2 -g -Wall -Wp,-D_FORTIFY_SOURCE=2 -fstack-protector-all -fPIE -fPIC
+LDFLAGS=@LDFLAGS@ -fPIC -pie -z relro -z now -fstack-protector
 LDLIBS=@LIBS@
-
 prefix := /usr/local
 
 all: net2pcap
