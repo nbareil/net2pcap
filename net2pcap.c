@@ -32,6 +32,7 @@
 #include <netinet/if_ether.h>
 #include <getopt.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <errno.h>
 #include <sys/time.h>
 #include <sys/select.h>
