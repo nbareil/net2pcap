@@ -278,7 +278,6 @@ int main(int argc, char *argv[])
         struct group *group_entry;
 	struct timeval native_tv;
 	struct timezone tz;
-	struct sigaction sa;
         struct signalfd_siginfo sigfdinfo;
         sigset_t mask;
 	int xdump = 0;
