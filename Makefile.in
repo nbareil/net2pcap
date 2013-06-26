@@ -10,6 +10,12 @@ all: net2pcap
 
 net2pcap: net2pcap.o
 
+.PHONY: static
+static: net2pcap.$(shell uname -m)
+net2pcap.$(shell uname -m): net2pcap.c
+	$(CC) $(CFLAGS) -static -o $@ $<
+
+
 .PHONY: clean
 clean:
 	rm -f net2pcap.o net2pcap
