@@ -401,6 +401,7 @@ int main(int argc, char *argv[])
 
 	if (promisc) {
 		struct packet_mreq mreq;
+		memset(&mreq, 0, sizeof mreq);
 		mreq.mr_ifindex = ifidx;
 		mreq.mr_type = PACKET_MR_PROMISC;
 		mreq.mr_alen = 0;
@@ -409,6 +410,7 @@ int main(int argc, char *argv[])
 	}
 	
 	if (ifidx || (ptype != ETH_P_ALL)) {
+		memset(&sll, 0, sizeof sll);
 		sll.sll_family = AF_PACKET;
 		sll.sll_protocol = htons(ptype);
 		sll.sll_ifindex = ifidx;
