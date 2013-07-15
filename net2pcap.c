@@ -48,6 +48,7 @@
 #include <syslog.h>
 #include <string.h>
 #include <unistd.h>
+#include <linux/filter.h>
 
 #ifndef O_LARGEFILE /* needed for SECCOMP rule */
 #        define O_LARGEFILE    00100000
@@ -186,9 +187,10 @@ int arphdr_to_linktype(int arphdr)
 void usage(void)
 {
         fprintf(stderr, IDENT
-                "Usage: net2pcap -i interface [-pdx] [-f capfile] [-t ethertype] [-s snaplen] [-r newroot]\n"
+                "Usage: net2pcap -i interface [-pdx] [-b BPF opcodes] [-f capfile] [-t ethertype] [-s snaplen] [-r newroot]\n"
                 "\t-p : doesn't set promiscuous mode\n"
                 "\t-d : daemon mode (background + uses syslog)\n"
+                "\t-b : BPF opcodes (in hexadecimal))\n"
                 "\t-x : hexdumps every packet on output (if not daemon)\n"
                 "\t-u : drop priviledges to UID\n"
                 "\t-g : drop priviledges to GID\n"
@@ -200,6 +202,41 @@ void usage(void)
         exit(EXIT_FAILURE);
 }
 
+unsigned char h2i(unsigned char c)
+{
+        unsigned char val = 0;
+
+        if (c >= '0' && c <= '9') {
+                val = c - '0';
+        } else if (c >= 'A' && c <= 'F') {
+                val = 10 + (c - 'A');
+        } else if (c >= 'a' && c <= 'f') {
+                val = 10 + (c - 'a');
+        } else {
+                ERROR("Invalid hexadecimal digit");
+        }
+
+        return val;
+}
+
+void hex2fprog(char *s, struct sock_fprog *fprog)
+{
+        unsigned int i, j, len;
+
+        len = strlen(s);
+        if (len % 2 != 0) {
+                ERROR("BPF opcodes: invalid hexadecimal format (length not even)");
+        }
+
+        i = j = 0;
+        while ((i+2) <= len) {
+                s[j++] = (h2i(s[i]) << 4) + h2i(s[i+1]);
+                i += 2;
+        }
+
+        fprog->filter = (struct sock_filter *)s;
+        fprog->len = j / sizeof(struct sock_filter);
+}
 
 /* Hexdump functions */
 
@@ -271,6 +308,7 @@ int main(int argc, char *argv[])
 	void *buf;
 	size_t snaplen = DEFAULT_SNAPLEN;
 	int f;
+        struct sock_fprog fprog = {0, NULL};
 	struct sockaddr_ll sll;
 	struct pcap_file_header hdr;
 	struct pcap_pkthdr phdr;
@@ -305,13 +343,17 @@ int main(int argc, char *argv[])
 
 	/* Get options */
 
-        while ((c = getopt(argc, argv, "dxhi:f:t:r:s:pu:g:")) != -1) {
+        while ((c = getopt(argc, argv, "b:dxhi:f:t:r:s:pu:g:")) != -1) {
 		switch(c) {
 		case 'h':
 			usage();
 		case 'i':
 			iff = optarg;
 			break;
+                case 'b':
+                        hex2fprog(optarg, &fprog);
+                        break;
+
 		case 'f':
 			fcap = optarg;
 			break;
@@ -386,7 +428,7 @@ int main(int argc, char *argv[])
 
 	buf = malloc(snaplen);
 	if (!buf) PERROR("malloc");
-	
+
 	/* Prepare socket according to options */
 
 	s = socket(PF_PACKET, SOCK_RAW, htons(ptype));
@@ -408,7 +450,7 @@ int main(int argc, char *argv[])
 		if (setsockopt(s, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) == -1)
 			PERROR("setsockopt");
 	}
-	
+
 	if (ifidx || (ptype != ETH_P_ALL)) {
 		memset(&sll, 0, sizeof sll);
 		sll.sll_family = AF_PACKET;
@@ -416,7 +458,13 @@ int main(int argc, char *argv[])
 		sll.sll_ifindex = ifidx;
 		if (bind(s, (struct sockaddr *)&sll, sizeof(sll)) == -1) PERROR("bind");
 	}
-	
+
+        if (fprog.len > 0) {
+                if (setsockopt(s, SOL_SOCKET, SO_ATTACH_FILTER, &fprog, sizeof fprog) != 0) {
+                        PERROR("cannot install BPF filter");
+                }
+        }
+
 	l = sizeof(sll);
 	if (getsockname(s, (struct sockaddr *)&sll, &l) == -1)
 		PERROR("getsockname");
